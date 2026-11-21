@@ -1,11 +1,9 @@
 use_default_settings: true
 server:
-  secret_key: "CHANGE_ME_random_long_string"
+  secret_key: "khoj-change-this-long-random-string-9f3k2j"
   limiter: false
   image_proxy: true
 search:
-  formats: [html, json]
-  default_lang: "bn"
-  autocomplete: "duckduckgo"
-general:
-  instance_name: "Khoj"
+  formats:
+    - html
+    - json
