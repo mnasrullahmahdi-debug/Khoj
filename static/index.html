@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>খোঁজ</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b6b5f">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+:root{--bg:#f6f7f4;--fg:#18211f;--muted:#5d6b67;--line:#d9ded9;--accent:#0b6b5f;--card:#fff;--link:#0a4f9e}
+@media (prefers-color-scheme:dark){:root{--bg:#121816;--fg:#e8eeeb;--muted:#9aaaa4;--line:#2a3532;--accent:#4cc4b2;--card:#1a2321;--link:#8ab8f5}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 "Noto Sans Bengali",system-ui,sans-serif}
+main{max-width:720px;margin:0 auto;padding:max(24px,env(safe-area-inset-top)) 16px 48px}
+h1{font-size:2.4rem;margin:8vh 0 4px;letter-spacing:-.5px;color:var(--accent)}
+.tag{margin:0 0 24px;color:var(--muted)}
+form{display:flex;gap:8px}
+input{flex:1;min-width:0;padding:14px 16px;font:inherit;color:var(--fg);background:var(--card);border:1.5px solid var(--line);border-radius:12px}
+input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{padding:0 20px;font:inherit;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:12px;cursor:pointer}
+@media (prefers-color-scheme:dark){button{color:#08201b}}
+#answer{margin:24px 0;padding:16px 18px;background:var(--card);border-left:4px solid var(--accent);border-radius:4px 12px 12px 4px;white-space:pre-wrap}
+#answer small{display:block;margin-top:10px;color:var(--muted)}
+#answer a{color:var(--accent);font-weight:600;text-decoration:none}
+.r{padding:14px 0;border-bottom:1px solid var(--line)}
+.r a{color:var(--link);font-size:1.05rem;text-decoration:none;word-break:break-word}
+.r a:hover{text-decoration:underline}
+.u{font-size:.8rem;color:var(--muted);word-break:break-all}
+.r p{margin:4px 0 0}
+.e{font-size:.75rem;color:var(--muted)}
+#status{color:var(--muted);margin-top:20px}
+nav{display:flex;gap:6px;margin:16px 0 0;overflow-x:auto}
+nav button{padding:8px 16px;background:transparent;color:var(--muted);border:1.5px solid var(--line);font-weight:500}
+nav button[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
+@media (prefers-color-scheme:dark){nav button[aria-pressed=true]{color:#08201b}}
+.wrap{position:relative}
+#sug{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;z-index:5}
+#sug div{padding:10px 16px;cursor:pointer}
+#sug div:hover,#sug div.on{background:var(--bg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:16px}
+.grid a{display:block;background:var(--card);border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+.grid img{width:100%;height:130px;object-fit:cover;display:block}
+.grid span{display:block;padding:6px 8px;font-size:.75rem;color:var(--muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.vid{display:flex;gap:12px}
+.vid img{width:120px;height:80px;object-fit:cover;border-radius:8px;flex:none}
+footer{margin-top:40px;font-size:.8rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>খোঁজ</h1>
+  <p class="tag">একাধিক সার্চ ইঞ্জিন, একটাই উত্তর। আপনার তথ্য সংরক্ষণ হয় না।</p>
+  <form id="f">
+    <div class="wrap" style="flex:1;display:flex">
+      <input id="q" type="search" placeholder="কী জানতে চান?" autocomplete="off" required>
+      <div id="sug" hidden></div>
+    </div>
+    <button>খুঁজুন</button>
+  </form>
+  <nav id="tabs">
+    <button type="button" data-c="general" aria-pressed="true">সব</button>
+    <button type="button" data-c="images" aria-pressed="false">ছবি</button>
+    <button type="button" data-c="news" aria-pressed="false">খবর</button>
+    <button type="button" data-c="videos" aria-pressed="false">ভিডিও</button>
+  </nav>
+  <div id="status"></div>
+  <div id="answer" hidden></div>
+  <div id="results"></div>
+  <footer>ফলাফল SearXNG-এর মাধ্যমে বিভিন্ন ইঞ্জিন থেকে আনা হয়। AI ভুল করতে পারে, সোর্স যাচাই করুন।</footer>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl = u => /^https?:\/\//i.test(u) ? u : '#';
+const prox = u => u ? '/api/img?u=' + encodeURIComponent(u) : '';
+let cat = 'general', lastQ = '';
+
+document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => {
+  cat = b.dataset.c;
+  document.querySelectorAll('#tabs button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  if ($('q').value.trim()) run($('q').value.trim());
+}));
+
+$('f').addEventListener('submit', e => { e.preventDefault(); hideSug(); run($('q').value.trim()); });
+
+// সাজেশন
+let t, sugIdx = -1;
+const hideSug = () => { $('sug').hidden = true; sugIdx = -1; };
+$('q').addEventListener('input', () => {
+  clearTimeout(t);
+  const v = $('q').value.trim();
+  if (v.length < 2) return hideSug();
+  t = setTimeout(async () => {
+    try {
+      const list = await (await fetch('/api/suggest?q=' + encodeURIComponent(v))).json();
+      if (!list.length) return hideSug();
+      $('sug').innerHTML = list.map(x => `<div>${esc(x)}</div>`).join('');
+      $('sug').hidden = false; sugIdx = -1;
+    } catch { hideSug(); }
+  }, 250);
+});
+$('sug').addEventListener('mousedown', e => {
+  if (e.target.tagName === 'DIV') { $('q').value = e.target.textContent; hideSug(); run($('q').value); }
+});
+$('q').addEventListener('keydown', e => {
+  const items = $('sug').children;
+  if ($('sug').hidden || !items.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    sugIdx = (sugIdx + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    [...items].forEach((d, i) => d.classList.toggle('on', i === sugIdx));
+    $('q').value = items[sugIdx].textContent;
+  } else if (e.key === 'Escape') hideSug();
+});
+document.addEventListener('click', e => { if (!e.target.closest('.wrap')) hideSug(); });
+
+async function run(q) {
+  if (!q) return;
+  lastQ = q;
+  history.replaceState(null, '', '#' + encodeURIComponent(q) + '|' + cat);
+  $('status').textContent = 'খোঁজা হচ্ছে...';
+  $('answer').hidden = true;
+  $('results').innerHTML = '';
+  try {
+    const res = await fetch('/api/search?q=' + encodeURIComponent(q) + '&c=' + cat);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'সমস্যা হয়েছে');
+    if (q !== lastQ) return;
+    $('status').textContent = data.results.length ? '' : 'কিছু পাওয়া যায়নি। অন্যভাবে লিখে দেখুন।';
+    if (data.answer) {
+      const text = esc(data.answer).replace(/\[(\d+)\]/g, (m, n) => {
+        const r = data.results[n - 1];
+        return r ? `<a href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">[${n}]</a>` : m;
+      });
+      $('answer').innerHTML = text + '<small>AI-র তৈরি সারাংশ, সোর্স যাচাই করুন</small>';
+      $('answer').hidden = false;
+    }
+    render(data);
+  } catch (err) {
+    $('status').textContent = err.message;
+  }
+}
+
+function render(data) {
+  const link = r => `href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer"`;
+  if (data.category === 'images') {
+    $('results').innerHTML = '<div class="grid">' + data.results.filter(r => r.thumb).map(r =>
+      `<a ${link(r)} title="${esc(r.title)}"><img loading="lazy" referrerpolicy="no-referrer" src="${esc(prox(r.thumb))}" alt="${esc(r.title)}"><span>${esc(r.title)}</span></a>`).join('') + '</div>';
+    return;
+  }
+  $('results').innerHTML = data.results.map(r => {
+    const thumb = data.category === 'videos' && r.thumb
+      ? `<img loading="lazy" src="${esc(prox(r.thumb))}" alt="">` : '';
+    const date = data.category === 'news' && r.date ? new Date(r.date).toLocaleDateString('bn-BD') + ' · ' : '';
+    return `<div class="r ${thumb ? 'vid' : ''}">${thumb}<div>
+      <a ${link(r)}>${esc(r.title)}</a>
+      <div class="u">${esc(r.url)}</div>
+      <p>${esc(r.snippet)}</p>
+      <div class="e">${esc(date + (r.engines || []).join(', '))}</div></div></div>`;
+  }).join('');
+}
+
+// লিংক থেকে খোলা
+if (location.hash.length > 1) {
+  const h = decodeURIComponent(location.hash.slice(1)), i = h.lastIndexOf('|'), q = i < 0 ? h : h.slice(0, i), c = i < 0 ? '' : h.slice(i + 1);
+  if (c) { cat = c; document.querySelectorAll('#tabs button').forEach(x => x.setAttribute('aria-pressed', x.dataset.c === c)); }
+  $('q').value = q; run(q);
+}
+if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js").catch(() => {}); }
+</script>
+</body>
+</html>
