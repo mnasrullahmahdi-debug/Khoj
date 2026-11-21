@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: khoj-searxng
+    runtime: docker
+    plan: free
+    rootDir: searxng
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: SEARXNG_SECRET
+        generateValue: true
+  - type: web
+    name: khoj
+    runtime: docker
+    plan: free
+    envVars:
+      - key: SEARXNG_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
